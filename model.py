@@ -32,7 +32,7 @@ def tdnn(input_, filter_scopes, nfilters, scope='TDNN'):
     '''
     max_word_len = input_.get_shape()[1]
     embed_size = input_.get_shape()[-1]
-    input_ = tf.expand_dims(input_,1)##
+    input_ = tf.expand_dims(input_, 1)##
     layers = []
     with tf.variable_scope(scope):
         for window_size, nfilter in zip(filter_scopes, nfilters):
@@ -40,12 +40,12 @@ def tdnn(input_, filter_scopes, nfilters, scope='TDNN'):
             conv = conv2d(input_, nfilter, 1, window_size, name = "kernel_%d"%window_size)
             #conv=tf.layers.conv2d(inputs=input_, filters=nfilter, kernel_size=window_size, padding="VALID", activation=tf.nn.relu, name="kernel_%d"%window_size)
             #pool = tf.layers.max_pooling2d(inputs=conv, pool_size=[1,1,reduced_length,1], stride=1)
-            pool = tf.nn.max_pool(tf.tanh(conv), [1,1,reduced_length, 1],[1,1,1,1],'VALID')
-            layers.append(tf.squeeze(pool,[1,2])) #
-        if len(filter_scopes)>1:
-            output=tf.concat(layers,1)
+            pool = tf.nn.max_pool(tf.tanh(conv), [1, 1, reduced_length, 1],[1, 1, 1, 1], 'VALID')
+            layers.append(tf.squeeze(pool, [1, 2])) #
+        if len(filter_scopes) > 1:
+            output = tf.concat(layers, 1)
         else:
-            output=layers[0]
+            output = layers[0]
     return output
 
 def linear(input_, output_size, scope=None):
@@ -65,11 +65,11 @@ def inference_graph(
     ntags,
     batch_size,
     num_steps,
-    char_emb_size=30,
-    lstm_state_size=200,
-    dropout=0.5,
-    filter_sizes=[3],
-    nfilters=[30],
+    char_emb_size,
+    lstm_state_size,
+    dropout,
+    filter_sizes,
+    nfilters,
     is_training=True):
 
     char_input = tf.placeholder(tf.int32,shape=[batch_size, num_steps, max_word_len],name="char_input")
@@ -115,28 +115,13 @@ def inference_graph(
     initial_state_fw = cell_fw.zero_state(batch_size, dtype=tf.float32)
     initial_state_bw = cell_bw.zero_state(batch_size, dtype=tf.float32)
     '''If use static_bidirectional_rnn'''
-    bilstm_outputs, output_state_fw, output_state_bw = tf.contrib.rnn.static_bidirectional_rnn(cell_fw, cell_bw, word_rep2, initial_state_fw=initial_state_fw, initial_state_bw=initial_state_bw, dtype=tf.float32)
-    '''If use bidirectional_dynamic_rnn
-        bilstm_outputs: batch_size x num_steps x 2*lstm_size
-    
-    bilstm_outputs, (output_state_fw, output_state_bw) = tf.nn.bidirectional_dynamic_rnn(
+    bilstm_outputs, output_state_fw, output_state_bw = tf.contrib.rnn.static_bidirectional_rnn(
         cell_fw,
         cell_bw,
-        word_rep,
+        word_rep2,
         initial_state_fw=initial_state_fw,
         initial_state_bw=initial_state_bw,
         dtype=tf.float32)
-    
-    linear_input = tf.reshape(bilstm_outputs, [-1, 2 * lstm_state_size])
-    with tf.variable_scope("SimpleLinear"):
-        W = tf.get_variable("W",
-                shape=[2 * lstm_state_size, ntags],
-                initializer=weight_initializer(2 * lstm_state_size, ntags), dtype=tf.float32)
-        b = tf.get_variable("b", shape=[ntags], initializer=tf.zeros_initializer(), dtype=tf.float32)
-        pred = tf.matmul(linear_input, W) + b
-        logits = tf.reshape(pred, [-1, num_steps, ntags])
-
-    '''
 
     '''Linear layer
         input: a list of length num_step, containing tensors shaped [batch_size, lstm_size*2]
@@ -153,31 +138,34 @@ def inference_graph(
     return adict(
             charinput=char_input,
             wordinput=word_input,
-            logits=stackedlogits,
+            logits=logits,
+            stackedlogits=stackedlogits,
             initial_lstm_state_fw=initial_state_fw,
             initial_lstm_state_bw=initial_state_bw,
             final_lstm_state_fw=output_state_fw,
             final_lstm_state_bw=output_state_bw)
 
 
-def crf_loss_graph(logits, batch_size, num_steps, seq_lens):
+def loss_graph(logits, batch_size, num_steps, crf, seq_lens):
 
     with tf.variable_scope("Loss"):
-        targets = tf.placeholder(tf.int32, [batch_size, num_steps], name='targets')
-        log_likelihood, trainsition_params = tf.contrib.crf.crf_log_likelihood(logits, targets, seq_lens)
-        loss = tf.reduce_mean(-log_likelihood)
-    return adict(targets=targets, loss=loss, transition_params=trainsition_params)
+        if crf:
+            stackedlogits = tf.stack(logits, axis=1)
+            targets = tf.placeholder(tf.int32, [batch_size, num_steps], name='targets')
+            log_likelihood, trainsition_params = tf.contrib.crf.crf_log_likelihood(stackedlogits, targets, seq_lens)
+            loss = tf.reduce_mean(-log_likelihood)
+            return adict(targets=targets, loss=loss, stackedlogits=stackedlogits, transition_params=trainsition_params)
+        else:
+            targets = tf.placeholder(tf.int64, [batch_size, num_steps], name='targets')
+            target_list = [tf.squeeze(x, [1]) for x in tf.split(targets, num_steps, 1)]
+            loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
+                logits=logits,
+                labels=target_list),
+                name='loss')
+            return adict(targets=targets, target_list=target_list, loss=loss)
 
 
-def loss_graph(logits, batch_size, num_steps):
-    with tf.variable_scope('Loss'):
-        targets = tf.placeholder(tf.int64, [batch_size, num_steps], name='targets')
-        target_list = [tf.squeeze(x, [1]) for x in tf.split(targets, num_steps, 1)]
-        loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=target_list), name='loss')
-    return adict(targets=targets, target_list=target_list, loss=loss)
-
-
-def training_graph(loss, learning_rate=0.01, max_grad_norm=5.0):
+def training_graph(loss, learning_rate, max_grad_norm):
     global_step = tf.Variable(0, name='global_step', trainable=False)
     
     with tf.variable_scope('SGD_Training'):
@@ -192,63 +180,3 @@ def training_graph(loss, learning_rate=0.01, max_grad_norm=5.0):
             global_step=global_step,
             global_norm=global_norm,
             train_op=train_op)
-
-    
-def main():
-    max_word_len = 35
-    pretrain_path = "glove.840B.300d.txt"
-    train_path = "eng.train"
-    validate_path = "eng.dev"
-    test_path = "eng.test"
-    pretrain_word2id, pretrain_emb = reader.load_pretrain(pretrain_path, [train_path, validate_path, test_path])
-    vocabs = reader.build_vocab("eng.train")
-    traindata = reader.DataSet(train_path, max_word_len, pretrain_word2id, pretrain_emb, vocabs)
-    traindata.load_data()
-    validate = reader.DataSet(validate_path, max_word_len, pretrain_word2id, pretrain_emb, vocabs)
-    validate.load_data()
-    test = reader.DataSet(test_path, max_word_len, pretrain_word2id, pretrain_emb, vocabs)
-    test.load_data()
-
-    with tf.Graph().as_default(), tf.Session() as sess:
-        train_model = inference_graph(
-                char_vocab_size=len(traindata.char2id),
-                pretrain_embedding=traindata.pretrain_emb,
-                max_word_len=max_word_len,
-                ntags=len(traindata.tag2id))
-
-        train_model.update(loss_graph(train_model.logits))
-        train_model.update(training_graph(train_model.loss * 20))    
-        init_op = tf.global_variables_initializer()
-        sess.run(init_op)
-        lstm_state_fw = sess.run(train_model.initial_lstm_state_fw)
-        lstm_state_bw = sess.run(train_model.initial_lstm_state_bw)
-        print "Start Training..."
-        for epoch in range(1000):
-            for i,(xc, xw, y) in enumerate(traindata.iterator(10, 20)):
-                logits, target_list, loss, _, lstm_state_fw, lstm_state_bw, gradient_norm, step = sess.run([
-                    train_model.logits,
-                    train_model.target_list,
-                    train_model.loss,
-                    train_model.train_op,
-                    train_model.final_lstm_state_fw,
-                    train_model.final_lstm_state_bw,
-                    train_model.global_norm,
-                    train_model.global_step],
-                    {train_model.charinput : xc,
-                    train_model.wordinput : xw,
-                    train_model.targets : y,
-                    train_model.initial_lstm_state_fw: lstm_state_fw,
-                    train_model.initial_lstm_state_bw: lstm_state_bw})
-#                target_list=[tf.squeeze(x,[1]) for x in tf.split(y, 20, 1)]
-                '''
-                for res in zip(logits, target_list):
-                    for i in range(10):
-                        pred=np.argmax(res[0][i])
-                        ans=res[1][i]
-                        print pred, ans 
-                '''
-            print "loss:",loss
-
-
-if __name__== '__main__':
-   main() 
