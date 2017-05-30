@@ -63,8 +63,8 @@ def inference_graph(
     pretrain_embedding,
     max_word_len,
     ntags,
-    batch_size=10,
-    num_steps=30,
+    batch_size,
+    num_steps,
     char_emb_size=30,
     lstm_state_size=200,
     dropout=0.5,
@@ -114,8 +114,30 @@ def inference_graph(
     cell_bw = create_rnn_cell()
     initial_state_fw = cell_fw.zero_state(batch_size, dtype=tf.float32)
     initial_state_bw = cell_bw.zero_state(batch_size, dtype=tf.float32)
+    '''If use static_bidirectional_rnn'''
     bilstm_outputs, output_state_fw, output_state_bw = tf.contrib.rnn.static_bidirectional_rnn(cell_fw, cell_bw, word_rep2, initial_state_fw=initial_state_fw, initial_state_bw=initial_state_bw, dtype=tf.float32)
-   
+    '''If use bidirectional_dynamic_rnn
+        bilstm_outputs: batch_size x num_steps x 2*lstm_size
+    
+    bilstm_outputs, (output_state_fw, output_state_bw) = tf.nn.bidirectional_dynamic_rnn(
+        cell_fw,
+        cell_bw,
+        word_rep,
+        initial_state_fw=initial_state_fw,
+        initial_state_bw=initial_state_bw,
+        dtype=tf.float32)
+    
+    linear_input = tf.reshape(bilstm_outputs, [-1, 2 * lstm_state_size])
+    with tf.variable_scope("SimpleLinear"):
+        W = tf.get_variable("W",
+                shape=[2 * lstm_state_size, ntags],
+                initializer=weight_initializer(2 * lstm_state_size, ntags), dtype=tf.float32)
+        b = tf.get_variable("b", shape=[ntags], initializer=tf.zeros_initializer(), dtype=tf.float32)
+        pred = tf.matmul(linear_input, W) + b
+        logits = tf.reshape(pred, [-1, num_steps, ntags])
+
+    '''
+
     '''Linear layer
         input: a list of length num_step, containing tensors shaped [batch_size, lstm_size*2]
     '''
@@ -127,14 +149,24 @@ def inference_graph(
                 scope.reuse_variables()
             pred = linear(output,ntags)
             logits.append(pred)
+    stackedlogits = tf.stack(logits, axis=1)
     return adict(
             charinput=char_input,
             wordinput=word_input,
-            logits=logits,
+            logits=stackedlogits,
             initial_lstm_state_fw=initial_state_fw,
             initial_lstm_state_bw=initial_state_bw,
             final_lstm_state_fw=output_state_fw,
             final_lstm_state_bw=output_state_bw)
+
+
+def crf_loss_graph(logits, batch_size, num_steps, seq_lens):
+
+    with tf.variable_scope("Loss"):
+        targets = tf.placeholder(tf.int32, [batch_size, num_steps], name='targets')
+        log_likelihood, trainsition_params = tf.contrib.crf.crf_log_likelihood(logits, targets, seq_lens)
+        loss = tf.reduce_mean(-log_likelihood)
+    return adict(targets=targets, loss=loss, transition_params=trainsition_params)
 
 
 def loss_graph(logits, batch_size, num_steps):
@@ -142,7 +174,7 @@ def loss_graph(logits, batch_size, num_steps):
         targets = tf.placeholder(tf.int64, [batch_size, num_steps], name='targets')
         target_list = [tf.squeeze(x, [1]) for x in tf.split(targets, num_steps, 1)]
         loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=target_list), name='loss')
-    return adict(targets=targets, target_list=target_list,loss=loss)
+    return adict(targets=targets, target_list=target_list, loss=loss)
 
 
 def training_graph(loss, learning_rate=0.01, max_grad_norm=5.0):
@@ -176,6 +208,7 @@ def main():
     validate.load_data()
     test = reader.DataSet(test_path, max_word_len, pretrain_word2id, pretrain_emb, vocabs)
     test.load_data()
+
     with tf.Graph().as_default(), tf.Session() as sess:
         train_model = inference_graph(
                 char_vocab_size=len(traindata.char2id),

@@ -7,9 +7,10 @@ import subprocess
 def run_epoch(sess, traindata, train_model, lstm_state_fw, lstm_state_bw, batch_size, num_steps):
 
     for i, (xc, xw, y) in enumerate(traindata.iterator(batch_size, num_steps)):
-        logits, target_list, loss, _, lstm_state_fw, lstm_state_bw, gradient_norm, step = sess.run([
+        logits, transition_params, loss, _, lstm_state_fw, lstm_state_bw, gradient_norm, step = sess.run([
             train_model.logits,
-            train_model.target_list,
+#            train_model.target_list,
+            train_model.transition_params,
             train_model.loss,
             train_model.train_op,
             train_model.final_lstm_state_fw,
@@ -22,7 +23,9 @@ def run_epoch(sess, traindata, train_model, lstm_state_fw, lstm_state_bw, batch_
             train_model.targets: y,
             train_model.initial_lstm_state_fw: lstm_state_fw,
             train_model.initial_lstm_state_bw: lstm_state_bw})
+    print "training loss:", loss
     return loss
+
 
 def conlleval(path):
     p = subprocess.Popen("cat " + path + "/eval.txt |" + path + "/conlleval", stdout=subprocess.PIPE, shell=True)
@@ -31,6 +34,55 @@ def conlleval(path):
     result = output.split("\n")[1]
     print result
     return float(result.split(" ")[-1])
+
+
+def crf_eval(sess, validate_data, validate_model, batch_size, num_steps, tmpdir):
+    lstm_state_fw = sess.run(validate_model.initial_lstm_state_fw)
+    lstm_state_bw = sess.run(validate_model.initial_lstm_state_bw)
+    evalres = []
+
+    print "Done with an epoch, evaluating on validation set..."
+    for i, (xc, xw, y) in enumerate(validate_data.iterator(batch_size, num_steps)):
+        loss, logits, transition_params, lstm_state_fw, lstm_state_bw = sess.run([
+            validate_model.loss,
+            validate_model.logits,
+            validate_model.transition_params,
+            #validate_model.target_list,
+            validate_model.final_lstm_state_fw,
+            validate_model.final_lstm_state_bw
+        ], {
+            validate_model.charinput: xc,
+            validate_model.wordinput: xw,
+            validate_model.targets: y,
+            validate_model.initial_lstm_state_fw: lstm_state_fw,
+            validate_model.initial_lstm_state_bw: lstm_state_bw})
+        ''' Collect predictions'''
+        # pdb.set_trace()
+        # tmpxl = [tf.squeeze(x, [1]) for x in tf.split(xl, num_steps, 1)]
+        # xl2 = sess.run(tmpxl)
+        viterbi_seqs = []
+        #pdb.set_trace()
+        for sent, logit in zip(xw, logits):
+            viterbi_seq, viterbi_score = tf.contrib.crf.viterbi_decode(
+                logit, transition_params)
+            viterbi_seqs += [viterbi_seq]
+
+
+        for i in range(batch_size):
+            for j in range(num_steps):
+                pred = viterbi_seqs[i][j]
+                ans = y[i][j]
+                line = "random random random"
+                predtag = validate_data.id2tag[pred]
+                anstag = validate_data.id2tag[ans]
+                evalline = line + " " + anstag + " " + predtag
+                evalres.append(evalline)
+
+    fp = open(tmpdir + "eval.txt", "w")
+    for l in evalres:
+        fp.write(l + "\n")
+    fp.close()
+    conlleval(tmpdir)
 
 def evaluate(sess, validate_data, validate_model, batch_size, num_steps, tmpdir):
     lstm_state_fw = sess.run(validate_model.initial_lstm_state_fw)
@@ -90,22 +142,28 @@ def main():
     validate.load_data()
     test = reader.DataSet(test_path, max_word_len, pretrain_word2id, pretrain_id2word, pretrain_emb, vocabs)
     test.load_data()
+    seq_lens = num_steps * np.ones(batch_size)
     with tf.Graph().as_default(), tf.Session() as sess:
         with tf.variable_scope("Model"):
             train_model = model.inference_graph(
                 char_vocab_size=len(traindata.char2id),
                 pretrain_embedding=traindata.pretrain_emb,
                 max_word_len=max_word_len,
-                ntags=len(traindata.tag2id))
-            train_model.update(model.loss_graph(train_model.logits, batch_size, num_steps))
+                ntags=len(traindata.tag2id),
+                batch_size=batch_size,
+                num_steps=num_steps)
+            train_model.update(model.crf_loss_graph(train_model.logits, batch_size, num_steps, seq_lens))
             train_model.update(model.training_graph(train_model.loss * num_steps))
+            #train_model.update(model.training_graph(train_model.loss))
         with tf.variable_scope("Model", reuse=True):
             validate_model=model.inference_graph(
                 char_vocab_size=len(validate.char2id),
                 pretrain_embedding=validate.pretrain_emb,
                 max_word_len=max_word_len,
-                ntags=len(validate.tag2id))
-            validate_model.update(model.loss_graph(validate_model.logits, batch_size, num_steps))
+                ntags=len(validate.tag2id),
+                batch_size=batch_size,
+                num_steps=num_steps)
+            validate_model.update(model.crf_loss_graph(validate_model.logits, batch_size, num_steps, seq_lens))
 
         init_op = tf.global_variables_initializer()
         sess.run(init_op)
@@ -115,7 +173,8 @@ def main():
         for epoch in range(total_epoch):
             print "epoch", epoch
             loss = run_epoch(sess, traindata, train_model, lstm_state_fw, lstm_state_bw, batch_size, num_steps)
-            evaluate(sess, validate, validate_model, batch_size, num_steps, eval_path)
+            #evaluate(sess, validate, validate_model, batch_size, num_steps, eval_path)
+            crf_eval(sess, validate, validate_model, batch_size, num_steps, eval_path)
 
 if __name__== '__main__':
    main()
