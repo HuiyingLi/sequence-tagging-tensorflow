@@ -1,0 +1,26 @@
+#paths
+
+pretrain_path = "glove.840B.300d.txt"
+train_path = "eng.train"
+validate_path = "eng.dev"
+test_path = "eng.test"
+eval_path = "/home/huiying/workspace/ner-project/tmp/"
+
+#model parameter
+batch_size = 10
+num_steps = 30
+max_word_len = 35
+lstm_state_size = 200
+dropout = 0.5
+char_emb_size = 30
+nfilter = 30
+filter_size = 3
+
+#optimization parameter
+
+#if use CRF or not: true or false
+crf = true
+total_epoch = 150
+max_grad_norm = 5.0
+learning_rate = 0.01
+
