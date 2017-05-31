@@ -3,6 +3,7 @@ import reader
 import pdb
 import numpy as np
 
+
 class adict(dict):
     def __init__(self, *av, **kav):
         dict.__init__(self, *av, **kav)
@@ -81,12 +82,12 @@ def inference_graph(
             dtype=tf.float32)
         input_embedded = tf.nn.embedding_lookup(char_embedding, char_input)
         input_embedded = tf.reshape(input_embedded, [-1, max_word_len, char_emb_size])
-    input_embedded_dropout = tf.nn.dropout(input_embedded, dropout)
+    #input_embedded_dropout = tf.nn.dropout(input_embedded, dropout)
     '''Apply convolution
         input: [batch_size*num_steps, max_word_len, char_emb_size]
         output: [batch_size, num_steps, sum(nfilters)]
     '''
-    char_rep = tdnn(input_embedded_dropout, filter_sizes, nfilters)
+    char_rep = tdnn(input_embedded, filter_sizes, nfilters)
     char_rep = tf.reshape(char_rep, [batch_size, num_steps, -1])    
     
     '''load and concatenate with pretrained embeddings
@@ -98,6 +99,7 @@ def inference_graph(
     word_embedding = tf.nn.embedding_lookup(L, word_input)
 
     word_rep = tf.concat([word_embedding, char_rep], axis=-1)
+    #word_rep_dropout = tf.nn.dropout(word_rep, keep_prob=1-dropout)
     word_rep2 = [tf.squeeze(x, [1]) for x in tf.split(word_rep, num_steps, 1)]
 
     '''LSTM
@@ -167,7 +169,7 @@ def loss_graph(logits, batch_size, num_steps, crf, seq_lens):
 
 def training_graph(loss, learning_rate, max_grad_norm):
     global_step = tf.Variable(0, name='global_step', trainable=False)
-    
+
     with tf.variable_scope('SGD_Training'):
         learning_rate = tf.Variable(learning_rate, trainable=False, name='learning_rate')
         tvars = tf.trainable_variables()

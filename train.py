@@ -4,6 +4,8 @@ import reader
 import numpy as np
 import pdb
 import subprocess
+import time
+
 def run_epoch(sess, traindata, train_model, lstm_state_fw, lstm_state_bw, batch_size, num_steps):
     for i, (xc, xw, y) in enumerate(traindata.iterator(batch_size, num_steps)):
         logits, transition_params, loss, _, learning_rate, lstm_state_fw, lstm_state_bw, gradient_norm, step = sess.run([
@@ -186,6 +188,7 @@ def main():
         print "Start Training..."
         for epoch in range(total_epoch):
             print "epoch", epoch
+            start_time = time.time()
             loss = run_epoch(sess, traindata, train_model, lstm_state_fw, lstm_state_bw, batch_size, num_steps)
 
             if crf:
@@ -194,6 +197,8 @@ def main():
                 evaluate(sess, validate, validate_model, batch_size, num_steps, config['eval_path'])
             new_learning_rate = learning_rate / (1 + decay_rate * (epoch + 1))
             sess.run(train_model.learning_rate.assign(new_learning_rate))
+            end_time = time.time()
+            print "Epoch training time:", end_time-start_time
 
 if __name__== '__main__':
    main()

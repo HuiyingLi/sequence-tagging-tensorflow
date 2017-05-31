@@ -1,6 +1,6 @@
 #paths
 
-pretrain_path = "glove.840B.300d.txt"
+pretrain_path = "embeddings/glove.6B.100d.txt"
 train_path = "eng.train"
 validate_path = "eng.dev"
 test_path = "eng.test"
@@ -22,5 +22,5 @@ filter_size = 3
 crf = true
 total_epoch = 150
 max_grad_norm = 5.0
-learning_rate = 0.015
-decay_rate = 0.05
+learning_rate = 0.1
+decay_rate = 0.03
