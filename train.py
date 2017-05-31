@@ -6,11 +6,12 @@ import pdb
 import subprocess
 def run_epoch(sess, traindata, train_model, lstm_state_fw, lstm_state_bw, batch_size, num_steps):
     for i, (xc, xw, y) in enumerate(traindata.iterator(batch_size, num_steps)):
-        logits, transition_params, loss, _, lstm_state_fw, lstm_state_bw, gradient_norm, step = sess.run([
+        logits, transition_params, loss, _, learning_rate, lstm_state_fw, lstm_state_bw, gradient_norm, step = sess.run([
             train_model.logits,
             train_model.transition_params,
             train_model.loss,
             train_model.train_op,
+            train_model.learning_rate,
             train_model.final_lstm_state_fw,
             train_model.final_lstm_state_bw,
             train_model.global_norm,
@@ -21,7 +22,7 @@ def run_epoch(sess, traindata, train_model, lstm_state_fw, lstm_state_bw, batch_
             train_model.targets: y,
             train_model.initial_lstm_state_fw: lstm_state_fw,
             train_model.initial_lstm_state_bw: lstm_state_bw})
-    print "training loss:", loss
+    print "learning rate:", learning_rate, "training loss:", loss
     return loss
 
 
@@ -130,6 +131,7 @@ def main():
     num_steps = config['num_steps']
     crf = config['crf']
     learning_rate = config['learning_rate']
+    decay_rate = config['decay_rate']
     max_grad_norm = config['max_grad_norm']
     pretrain_word2id, pretrain_id2word, pretrain_emb = reader.load_pretrain(
         config['pretrain_path'],
@@ -185,10 +187,13 @@ def main():
         for epoch in range(total_epoch):
             print "epoch", epoch
             loss = run_epoch(sess, traindata, train_model, lstm_state_fw, lstm_state_bw, batch_size, num_steps)
+
             if crf:
                 crf_eval(sess, validate, validate_model, batch_size, num_steps, config['eval_path'])
             else:
                 evaluate(sess, validate, validate_model, batch_size, num_steps, config['eval_path'])
+            new_learning_rate = learning_rate / (1 + decay_rate * (epoch + 1))
+            sess.run(train_model.learning_rate.assign(new_learning_rate))
 
 if __name__== '__main__':
    main()

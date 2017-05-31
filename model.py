@@ -81,12 +81,12 @@ def inference_graph(
             dtype=tf.float32)
         input_embedded = tf.nn.embedding_lookup(char_embedding, char_input)
         input_embedded = tf.reshape(input_embedded, [-1, max_word_len, char_emb_size])
-
+    input_embedded_dropout = tf.nn.dropout(input_embedded, dropout)
     '''Apply convolution
         input: [batch_size*num_steps, max_word_len, char_emb_size]
         output: [batch_size, num_steps, sum(nfilters)]
     '''
-    char_rep = tdnn(input_embedded, filter_sizes, nfilters)
+    char_rep = tdnn(input_embedded_dropout, filter_sizes, nfilters)
     char_rep = tf.reshape(char_rep, [batch_size, num_steps, -1])    
     
     '''load and concatenate with pretrained embeddings

@@ -22,5 +22,5 @@ filter_size = 3
 crf = true
 total_epoch = 150
 max_grad_norm = 5.0
-learning_rate = 0.01
-
+learning_rate = 0.015
+decay_rate = 0.05
