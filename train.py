@@ -28,11 +28,11 @@ def run_epoch(sess, traindata, train_model, lstm_state_fw, lstm_state_bw, batch_
     return loss
 
 
-def conlleval(path):
+def externaleval(evaldir_path, script_path):
     """
     :Use the script provided by CoNLL 2013 shared task to evaluate
     """
-    p = subprocess.Popen("cat " + path + "/eval.txt |" + path + "/conlleval", stdout=subprocess.PIPE, shell=True)
+    p = subprocess.Popen("cat " + evaldir_path + "/eval.txt |" + script_path, stdout=subprocess.PIPE, shell=True)
     (output, err) = p.communicate()
     p.wait()
     result = output.split("\n")[1]
@@ -40,11 +40,12 @@ def conlleval(path):
     return float(result.split(" ")[-1])
 
 
-def crf_eval(sess, validate_data, validate_model, batch_size, num_steps, tmpdir):
+def crf_eval(sess, validate_data, validate_model, batch_size, num_steps, tmpdir, eval_script_path):
     lstm_state_fw = sess.run(validate_model.initial_lstm_state_fw)
     lstm_state_bw = sess.run(validate_model.initial_lstm_state_bw)
     evalres = []
-
+    predlist = []
+    goldlist = []
     print "Done with an epoch, evaluating on validation set..."
     for i, (xc, xw, y) in enumerate(validate_data.iterator(batch_size, num_steps)):
         loss, stackedlogits, transition_params, lstm_state_fw, lstm_state_bw = sess.run([
@@ -69,6 +70,7 @@ def crf_eval(sess, validate_data, validate_model, batch_size, num_steps, tmpdir)
             viterbi_seqs += [viterbi_seq]
 
 
+        '''Prepares file for evluation'''
         for i in range(batch_size):
             for j in range(num_steps):
                 pred = viterbi_seqs[i][j]
@@ -79,11 +81,14 @@ def crf_eval(sess, validate_data, validate_model, batch_size, num_steps, tmpdir)
                 evalline = line + " " + anstag + " " + predtag
                 evalres.append(evalline)
 
+        predlist.extend(viterbi_seqs)
+        goldlist.extend(y)
+
     fp = open(tmpdir + "eval.txt", "w")
     for l in evalres:
         fp.write(l + "\n")
     fp.close()
-    conlleval(tmpdir)
+    externaleval(tmpdir, eval_script_path)
 
 def evaluate(sess, validate_data, validate_model, batch_size, num_steps, tmpdir):
     lstm_state_fw = sess.run(validate_model.initial_lstm_state_fw)
@@ -122,7 +127,7 @@ def evaluate(sess, validate_data, validate_model, batch_size, num_steps, tmpdir)
     for l in evalres:
         fp.write(l+"\n")
     fp.close()
-    conlleval(tmpdir)
+    externaleval(tmpdir)
 
 
 def main():
@@ -192,7 +197,7 @@ def main():
             loss = run_epoch(sess, traindata, train_model, lstm_state_fw, lstm_state_bw, batch_size, num_steps)
 
             if crf:
-                crf_eval(sess, validate, validate_model, batch_size, num_steps, config['eval_path'])
+                crf_eval(sess, validate, validate_model, batch_size, num_steps, config['eval_path'], config['eval_script_path'])
             else:
                 evaluate(sess, validate, validate_model, batch_size, num_steps, config['eval_path'])
             new_learning_rate = learning_rate / (1 + decay_rate * (epoch + 1))
