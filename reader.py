@@ -35,7 +35,6 @@ def build_vocab(train_path):
     with open(train_path) as f:
         for line in f:
             line = line.strip()
-            print line
             if len(line) == 0:
                 continue
             line = line.split(" ")

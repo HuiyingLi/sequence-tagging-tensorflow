@@ -7,6 +7,7 @@ import subprocess
 import time
 
 def run_epoch(sess, traindata, train_model, lstm_state_fw, lstm_state_bw, batch_size, num_steps):
+    avg_loss = 0
     for i, (xc, xw, y) in enumerate(traindata.iterator(batch_size, num_steps)):
         logits, transition_params, loss, _, learning_rate, lstm_state_fw, lstm_state_bw, gradient_norm, step = sess.run([
             train_model.logits,
@@ -24,15 +25,18 @@ def run_epoch(sess, traindata, train_model, lstm_state_fw, lstm_state_bw, batch_
             train_model.targets: y,
             train_model.initial_lstm_state_fw: lstm_state_fw,
             train_model.initial_lstm_state_bw: lstm_state_bw})
-    print "learning rate:", learning_rate, "training loss:", loss
-    return loss
+        avg_loss += loss
+    avg_loss /= (i+1)
+    print "learning rate:", learning_rate, "average training loss:", avg_loss
+    return avg_loss
 
 
 def externaleval(evaldir_path, script_path):
     """
     :Use the script provided by CoNLL 2013 shared task to evaluate
     """
-    p = subprocess.Popen("cat " + evaldir_path + "/eval.txt |" + script_path, stdout=subprocess.PIPE, shell=True)
+    cmd = "cat " + evaldir_path + "/eval.txt |" + script_path
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
     (output, err) = p.communicate()
     p.wait()
     result = output.split("\n")[1]
@@ -46,7 +50,7 @@ def crf_eval(sess, validate_data, validate_model, batch_size, num_steps, tmpdir,
     evalres = []
     predlist = []
     goldlist = []
-    print "Done with an epoch, evaluating on validation set..."
+    print "Done with an epoch, evaluating on", validate_model.name, "set..."
     for i, (xc, xw, y) in enumerate(validate_data.iterator(batch_size, num_steps)):
         loss, stackedlogits, transition_params, lstm_state_fw, lstm_state_bw = sess.run([
             validate_model.loss,
@@ -88,7 +92,7 @@ def crf_eval(sess, validate_data, validate_model, batch_size, num_steps, tmpdir,
     for l in evalres:
         fp.write(l + "\n")
     fp.close()
-    externaleval(tmpdir, eval_script_path)
+    return externaleval(tmpdir, eval_script_path)
 
 def evaluate(sess, validate_data, validate_model, batch_size, num_steps, tmpdir):
     lstm_state_fw = sess.run(validate_model.initial_lstm_state_fw)
@@ -127,7 +131,7 @@ def evaluate(sess, validate_data, validate_model, batch_size, num_steps, tmpdir)
     for l in evalres:
         fp.write(l+"\n")
     fp.close()
-    externaleval(tmpdir)
+    return externaleval(tmpdir)
 
 
 def main():
@@ -171,6 +175,7 @@ def main():
             train_model.update(model.loss_graph(train_model.logits, batch_size, num_steps, crf, seq_lens))
             train_model.update(model.training_graph(train_model.loss * num_steps, learning_rate, max_grad_norm))
             #train_model.update(model.training_graph(train_model.loss))
+        '''Validate model'''
         with tf.variable_scope("Model", reuse=True):
             validate_model=model.inference_graph(
                 char_vocab_size=len(validate.char2id),
@@ -185,21 +190,46 @@ def main():
                 filter_sizes=[config['filter_size']],
                 nfilters=[config['nfilter']])
             validate_model.update(model.loss_graph(validate_model.logits, batch_size, num_steps, crf, seq_lens))
-
+            validate_model.update(model.adict(name="validation"))
+        '''Test model'''
+        with tf.variable_scope("Model", reuse=True):
+            test_model=model.inference_graph(
+                char_vocab_size=len(test.char2id),
+                pretrain_embedding=test.pretrain_emb,
+                max_word_len=max_word_len,
+                ntags=len(test.tag2id),
+                batch_size=batch_size,
+                num_steps=num_steps,
+                char_emb_size=config['char_emb_size'],
+                lstm_state_size=config['lstm_state_size'],
+                dropout=config['dropout'],
+                filter_sizes=[config['filter_size']],
+                nfilters=[config['nfilter']])
+            test_model.update(model.loss_graph(test_model.logits, batch_size, num_steps, crf, seq_lens))
+            test_model.update(model.adict(name="test"))
         init_op = tf.global_variables_initializer()
         sess.run(init_op)
         lstm_state_fw = sess.run(train_model.initial_lstm_state_fw)
         lstm_state_bw = sess.run(train_model.initial_lstm_state_bw)
         print "Start Training..."
+
+        current_best_Fscore = 0.0
         for epoch in range(total_epoch):
             print "epoch", epoch
             start_time = time.time()
             loss = run_epoch(sess, traindata, train_model, lstm_state_fw, lstm_state_bw, batch_size, num_steps)
 
             if crf:
-                crf_eval(sess, validate, validate_model, batch_size, num_steps, config['eval_path'], config['eval_script_path'])
+                Fscore = crf_eval(sess, validate, validate_model, batch_size, num_steps, config['eval_path'], config['eval_script_path'])
             else:
-                evaluate(sess, validate, validate_model, batch_size, num_steps, config['eval_path'])
+                Fscore = evaluate(sess, validate, validate_model, batch_size, num_steps, config['eval_path'])
+            if Fscore>current_best_Fscore:
+                current_best_Fscore = Fscore
+                if epoch > 10:
+                    print "**Results on test set with current best F:", current_best_Fscore
+                    crf_eval(sess, test, test_model, batch_size, num_steps, config['eval_path'],
+                             config['eval_script_path'])
+
             new_learning_rate = learning_rate / (1 + decay_rate * (epoch + 1))
             sess.run(train_model.learning_rate.assign(new_learning_rate))
             end_time = time.time()

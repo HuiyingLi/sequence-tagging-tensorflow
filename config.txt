@@ -1,11 +1,11 @@
 #paths
 
 pretrain_path = "embeddings/glove.6B.100d.txt"
-train_path = "eng.train.bioes"
-validate_path = "eng.dev.bioes"
-test_path = "eng.test.bioes"
+train_path = "eng.train"
+validate_path = "eng.dev"
+test_path = "eng.test"
 eval_path = "/home/huiying/workspace/ner-project/tmp/"
-eval_script_path = "/home/huiying/workspace/ner-project/tmp/bioes_eval.py"
+eval_script_path = "/home/huiying/workspace/ner-project/tmp/conlleval"
 
 #model parameter
 batch_size = 10
@@ -24,4 +24,4 @@ crf = true
 total_epoch = 300
 max_grad_norm = 5.0
 learning_rate = 0.1
-decay_rate = 0.05
+decay_rate = 0.1

@@ -70,8 +70,7 @@ def inference_graph(
     lstm_state_size,
     dropout,
     filter_sizes,
-    nfilters,
-    is_training=True):
+    nfilters):
 
     char_input = tf.placeholder(tf.int32,shape=[batch_size, num_steps, max_word_len],name="char_input")
     
@@ -82,7 +81,9 @@ def inference_graph(
             dtype=tf.float32)
         input_embedded = tf.nn.embedding_lookup(char_embedding, char_input)
         input_embedded = tf.reshape(input_embedded, [-1, max_word_len, char_emb_size])
-    #input_embedded_dropout = tf.nn.dropout(input_embedded, dropout)
+
+    if dropout > 0.0:
+        input_embedded = tf.nn.dropout(input_embedded, dropout)
     '''Apply convolution
         input: [batch_size*num_steps, max_word_len, char_emb_size]
         output: [batch_size, num_steps, sum(nfilters)]
@@ -99,7 +100,8 @@ def inference_graph(
     word_embedding = tf.nn.embedding_lookup(L, word_input)
 
     word_rep = tf.concat([word_embedding, char_rep], axis=-1)
-    #word_rep_dropout = tf.nn.dropout(word_rep, keep_prob=1-dropout)
+    if dropout > 0.0:
+        word_rep = tf.nn.dropout(word_rep, keep_prob=1-dropout)
     word_rep2 = [tf.squeeze(x, [1]) for x in tf.split(word_rep, num_steps, 1)]
 
     '''LSTM
