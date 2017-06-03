@@ -109,7 +109,7 @@ def inference_graph(
         output size: a list of length num_step, containing tensors shaped [batch_size, lstm_size*2] 
     '''
     def create_rnn_cell():
-        cell = tf.contrib.rnn.BasicLSTMCell(lstm_state_size, forget_bias=1.0, state_is_tuple=True, reuse=False)
+        cell = tf.contrib.rnn.LSTMCell(lstm_state_size, forget_bias=1.0, state_is_tuple=True, reuse=False)
         if dropout > 0.0:
             cell = tf.contrib.rnn.DropoutWrapper(cell, output_keep_prob=1.0 - dropout)
         return cell
@@ -177,7 +177,8 @@ def training_graph(loss, learning_rate, max_grad_norm):
         tvars = tf.trainable_variables()
         grads, global_norm = tf.clip_by_global_norm(tf.gradients(loss, tvars), max_grad_norm)
         
-        optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+        #optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+        optimizer = tf.train.MomentumOptimizer(learning_rate, 0.9)
         train_op = optimizer.apply_gradients(zip(grads,tvars), global_step=global_step)
     
     return adict(learning_rate=learning_rate,

@@ -50,7 +50,7 @@ def crf_eval(sess, validate_data, validate_model, batch_size, num_steps, tmpdir,
     evalres = []
     predlist = []
     goldlist = []
-    print "Done with an epoch, evaluating on", validate_model.name, "set..."
+    #print "Done with an epoch, evaluating on", validate_model.name, "set..."
     for i, (xc, xw, y) in enumerate(validate_data.iterator(batch_size, num_steps)):
         loss, stackedlogits, transition_params, lstm_state_fw, lstm_state_bw = sess.run([
             validate_model.loss,
@@ -225,10 +225,9 @@ def main():
                 Fscore = evaluate(sess, validate, validate_model, batch_size, num_steps, config['eval_path'])
             if Fscore>current_best_Fscore:
                 current_best_Fscore = Fscore
-                if epoch > 10:
-                    print "**Results on test set with current best F:", current_best_Fscore
-                    crf_eval(sess, test, test_model, batch_size, num_steps, config['eval_path'],
-                             config['eval_script_path'])
+                print "**Results on test set with current best F:", current_best_Fscore
+                crf_eval(sess, test, test_model, batch_size, num_steps, config['eval_path'],
+                         config['eval_script_path'])
 
             new_learning_rate = learning_rate / (1 + decay_rate * (epoch + 1))
             sess.run(train_model.learning_rate.assign(new_learning_rate))

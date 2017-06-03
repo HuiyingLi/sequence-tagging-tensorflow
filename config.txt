@@ -21,7 +21,7 @@ filter_size = 3
 
 #if use CRF or not: true or false
 crf = true
-total_epoch = 300
+total_epoch = 1000
 max_grad_norm = 5.0
-learning_rate = 0.1
-decay_rate = 0.1
+learning_rate = 0.015
+decay_rate = 0.05
