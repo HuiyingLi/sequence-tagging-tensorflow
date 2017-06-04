@@ -6,6 +6,7 @@ validate_path = "eng.dev"
 test_path = "eng.test"
 eval_path = "/home/huiying/workspace/ner-project/tmp/"
 eval_script_path = "/home/huiying/workspace/ner-project/tmp/conlleval"
+checkpoint_path = "/home/huiying/workspace/ner-project/tmp/chkpnt"
 
 #model parameter
 batch_size = 10
@@ -21,7 +22,7 @@ filter_size = 3
 
 #if use CRF or not: true or false
 crf = true
-total_epoch = 1000
+total_epoch = 200
 max_grad_norm = 5.0
 learning_rate = 0.015
 decay_rate = 0.05

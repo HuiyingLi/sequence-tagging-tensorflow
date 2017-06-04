@@ -158,6 +158,7 @@ def main():
                           pretrain_word2id, pretrain_id2word, pretrain_emb, vocabs)
     test.load_data()
     seq_lens = num_steps * np.ones(batch_size)
+
     with tf.Graph().as_default(), tf.Session() as sess:
         with tf.variable_scope("Model"):
             train_model = model.inference_graph(
@@ -175,6 +176,8 @@ def main():
             train_model.update(model.loss_graph(train_model.logits, batch_size, num_steps, crf, seq_lens))
             train_model.update(model.training_graph(train_model.loss * num_steps, learning_rate, max_grad_norm))
             #train_model.update(model.training_graph(train_model.loss))
+        saver = tf.train.Saver()
+
         '''Validate model'''
         with tf.variable_scope("Model", reuse=True):
             validate_model=model.inference_graph(
@@ -213,6 +216,7 @@ def main():
         lstm_state_bw = sess.run(train_model.initial_lstm_state_bw)
         print "Start Training..."
 
+
         current_best_Fscore = 0.0
         for epoch in range(total_epoch):
             print "epoch", epoch
@@ -228,6 +232,8 @@ def main():
                 print "**Results on test set with current best F:", current_best_Fscore
                 crf_eval(sess, test, test_model, batch_size, num_steps, config['eval_path'],
                          config['eval_script_path'])
+                saver.save(sess, config['checkpoint_path'])
+                print "Model saved!"
 
             new_learning_rate = learning_rate / (1 + decay_rate * (epoch + 1))
             sess.run(train_model.learning_rate.assign(new_learning_rate))
