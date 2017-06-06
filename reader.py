@@ -3,26 +3,6 @@ import numpy as np
 import pdb
 import sys
 
-
-def read_parameters(config_path):
-    config={}
-    with open(config_path,"r") as f:
-        for l in f:
-            l=l.strip()
-            if len(l) > 0 and l[0] != "#":
-                l=l.split(" ")
-                if l[2][0] == '"':
-                    l[2] = l[2][1:-1]
-                elif l[2] == "true":
-                    l[2] = True
-                elif l[2] == "false":
-                    l[2] = False
-                else:
-                    l[2] = float(l[2]) if '.' in l[2] else int(l[2])
-                config[l[0]] = l[2]
-    return config
-
-
 def build_vocab(train_path):
     worddict = {}
     tagdict = {}

@@ -24,7 +24,6 @@ def conv2d(input_, output_dim, k_h, k_w, name="conv2d"):
         b = tf.get_variable('b', [output_dim])
     return tf.nn.conv2d(input_, w, strides=[1,1,1,1], padding='VALID')+b
 
-
 def tdnn(input_, filter_scopes, nfilters, scope='TDNN'):
     '''
     input: float tensor of shape [batch_size x num_steps x max_word_len x embed_size]
@@ -68,6 +67,7 @@ def inference_graph(
     num_steps,
     char_emb_size,
     lstm_state_size,
+    num_rnn_layers,
     dropout,
     filter_sizes,
     nfilters):
@@ -100,8 +100,6 @@ def inference_graph(
     word_embedding = tf.nn.embedding_lookup(L, word_input)
 
     word_rep = tf.concat([word_embedding, char_rep], axis=-1)
-    if dropout > 0.0:
-        word_rep = tf.nn.dropout(word_rep, keep_prob=1-dropout)
     word_rep2 = [tf.squeeze(x, [1]) for x in tf.split(word_rep, num_steps, 1)]
 
     '''LSTM
@@ -111,11 +109,20 @@ def inference_graph(
     def create_rnn_cell():
         cell = tf.contrib.rnn.LSTMCell(lstm_state_size, forget_bias=1.0, state_is_tuple=True, reuse=False)
         if dropout > 0.0:
-            cell = tf.contrib.rnn.DropoutWrapper(cell, output_keep_prob=1.0 - dropout)
+            cell = tf.contrib.rnn.DropoutWrapper(cell,
+                                                 output_keep_prob=1.0 - dropout,
+                                                 variational_recurrent=True,
+                                                 dtype=tf.float32,
+                                                 input_size=[batch_size, num_steps, char_emb_size + 100])
         return cell
 
-    cell_fw = create_rnn_cell()
-    cell_bw = create_rnn_cell()
+    if num_rnn_layers > 1:
+        cell_fw = tf.contrib.rnn.MultiRNNCell([create_rnn_cell() for _ in range(num_rnn_layers)], state_is_tuple=True)
+        cell_bw = tf.contrib.rnn.MultiRNNCell([create_rnn_cell() for _ in range(num_rnn_layers)], state_is_tuple=True)
+    else:
+        cell_fw = create_rnn_cell()
+        cell_bw = create_rnn_cell()
+
     initial_state_fw = cell_fw.zero_state(batch_size, dtype=tf.float32)
     initial_state_bw = cell_bw.zero_state(batch_size, dtype=tf.float32)
     '''If use static_bidirectional_rnn'''

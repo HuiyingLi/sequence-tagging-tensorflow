@@ -14,10 +14,11 @@ tf.app.flags.DEFINE_string('eval_script_path', "/home/huiying/workspace/ner-proj
 tf.app.flags.DEFINE_string('checkpoint_path', "/home/huiying/workspace/ner-project/tmp/chkpnt", "")
 
 
-tf.app.flags.DEFINE_integer('batch_size', 10, 'number of sentences in a batch')
+tf.app.flags.DEFINE_integer('batch_size', 1, 'number of sentences in a batch')
 tf.app.flags.DEFINE_integer('num_steps', 30, 'number of steps unrolled in RNN')
 tf.app.flags.DEFINE_integer('max_word_len', 35, 'maximum number of characters contained in a word')
 tf.app.flags.DEFINE_integer('lstm_state_size', 200, 'number of lstm cells')
+tf.app.flags.DEFINE_integer('num_rnn_layers', 1, 'number of BiLSTM layers')
 tf.app.flags.DEFINE_integer('nfilter', 30, 'number of filters in characterlevel cnn')
 tf.app.flags.DEFINE_integer('filter_size', 3, 'the windows size each filter scans')
 tf.app.flags.DEFINE_integer('char_emb_size', 30, 'the character embedding dimension')
@@ -160,17 +161,6 @@ def evaluate(sess, validate_data, validate_model, batch_size, num_steps, tmpdir)
 
 
 def main():
-    '''
-    config = reader.read_parameters("config.txt")
-    max_word_len = config['max_word_len']
-    total_epoch = config['total_epoch']
-    batch_size = config['batch_size']
-    num_steps = config['num_steps']
-    crf = config['crf']
-    learning_rate = config['learning_rate']
-    decay_rate = config['decay_rate']
-    max_grad_norm = config['max_grad_norm']
-    '''
     pretrain_word2id, pretrain_id2word, pretrain_emb = reader.load_pretrain(
         FLAGS.pretrain_path,
         [FLAGS.train_path, FLAGS.validate_path, FLAGS.test_path])
@@ -197,6 +187,7 @@ def main():
                 num_steps=FLAGS.num_steps,
                 char_emb_size=FLAGS.char_emb_size,
                 lstm_state_size=FLAGS.lstm_state_size,
+                num_rnn_layers=FLAGS.num_rnn_layers,
                 dropout=FLAGS.dropout,
                 filter_sizes=[FLAGS.filter_size],
                 nfilters=[FLAGS.nfilter])
@@ -216,7 +207,8 @@ def main():
                 num_steps=FLAGS.num_steps,
                 char_emb_size=FLAGS.char_emb_size,
                 lstm_state_size=FLAGS.lstm_state_size,
-                dropout=FLAGS.dropout,
+                num_rnn_layers=FLAGS.num_rnn_layers,
+                dropout=0,  #No dropout when testing!
                 filter_sizes=[FLAGS.filter_size],
                 nfilters=[FLAGS.nfilter])
             validate_model.update(model.loss_graph(validate_model.logits, FLAGS.batch_size, FLAGS.num_steps, FLAGS.crf, seq_lens))
@@ -232,7 +224,8 @@ def main():
                 num_steps=FLAGS.num_steps,
                 char_emb_size=FLAGS.char_emb_size,
                 lstm_state_size=FLAGS.lstm_state_size,
-                dropout=FLAGS.dropout,
+                num_rnn_layers=FLAGS.num_rnn_layers,
+                dropout=0,
                 filter_sizes=[FLAGS.filter_size],
                 nfilters=[FLAGS.nfilter])
             test_model.update(model.loss_graph(test_model.logits, FLAGS.batch_size, FLAGS.num_steps, FLAGS.crf, seq_lens))
