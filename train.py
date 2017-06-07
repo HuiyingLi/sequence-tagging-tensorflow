@@ -6,11 +6,11 @@ import pdb
 import subprocess
 import time
 tf.app.flags.DEFINE_string('pretrain_path', "embeddings/glove.6B.100d.txt", "")
-tf.app.flags.DEFINE_string('train_path', "eng.train", "")
-tf.app.flags.DEFINE_string('validate_path', "eng.dev", "")
-tf.app.flags.DEFINE_string('test_path', "eng.test", "")
+tf.app.flags.DEFINE_string('train_path', "eng.train.bioes", "")
+tf.app.flags.DEFINE_string('validate_path', "eng.dev.bioes", "")
+tf.app.flags.DEFINE_string('test_path', "eng.test.bioes", "")
 tf.app.flags.DEFINE_string('eval_path', "/home/huiying/workspace/ner-project/tmp/", "")
-tf.app.flags.DEFINE_string('eval_script_path', "/home/huiying/workspace/ner-project/tmp/conlleval", "")
+tf.app.flags.DEFINE_string('eval_script_path', "/home/huiying/workspace/ner-project/tmp/bioeseval.py", "")
 tf.app.flags.DEFINE_string('checkpoint_path', "/home/huiying/workspace/ner-project/tmp/chkpnt", "")
 
 
@@ -22,7 +22,8 @@ tf.app.flags.DEFINE_integer('num_rnn_layers', 1, 'number of BiLSTM layers')
 tf.app.flags.DEFINE_integer('nfilter', 30, 'number of filters in characterlevel cnn')
 tf.app.flags.DEFINE_integer('filter_size', 3, 'the windows size each filter scans')
 tf.app.flags.DEFINE_integer('char_emb_size', 30, 'the character embedding dimension')
-tf.app.flags.DEFINE_float('dropout', 0, 'dropout probability')
+tf.app.flags.DEFINE_float('dropout', 0.5, 'dropout probability')
+#tf.app.flags.DEFINE_boolean('batch_normalization', True, 'if add batch normalization layer')
 
 tf.app.flags.DEFINE_integer('total_epoch', 200, 'total number of epochs to run')
 tf.app.flags.DEFINE_float('max_grad_norm', 5.0, 'gradient clipping')

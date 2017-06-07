@@ -110,10 +110,11 @@ def inference_graph(
         cell = tf.contrib.rnn.LSTMCell(lstm_state_size, forget_bias=1.0, state_is_tuple=True, reuse=False)
         if dropout > 0.0:
             cell = tf.contrib.rnn.DropoutWrapper(cell,
-                                                 output_keep_prob=1.0 - dropout,
-                                                 variational_recurrent=True,
-                                                 dtype=tf.float32,
-                                                 input_size=[batch_size, num_steps, char_emb_size + 100])
+                                                 input_keep_prob=1.0 - dropout,
+                                                 output_keep_prob=1.0 - dropout)
+        #                                         variational_recurrent=True,
+        #                                         dtype=tf.float32,
+        #                                         input_size=[batch_size, num_steps, char_emb_size + 100])
         return cell
 
     if num_rnn_layers > 1:
